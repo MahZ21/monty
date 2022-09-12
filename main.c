@@ -1,47 +1,80 @@
 #include "monty.h"
-
-/* global struct to hold flag for queue and stack length */
-var_t var;
+vars_t *element;
+void execute_cmd(stack_t *stack);
 
 /**
- * main - Monty bytecode interpreter
- * @argc: number of arguments passed
- * @argv: array of argument strings
- *
- * Return: EXIT_SUCCESS on success or EXIT_FAILURE on failure
+ * main - Entry point
+ * @argc: Size of arguments
+ * @argv: array of args
+ * Return: 0 (Success)
  */
-int main(int argc, char *argv[])
+int main(int argc, char **argv)
 {
 	stack_t *stack = NULL;
-	unsigned int line_number = 0;
-	FILE *fs = NULL;
-	char *lineptr = NULL, *op = NULL;
 	size_t n = 0;
+	vars_t temp = {NULL, NULL, NULL, NULL, 1, NULL};
 
-	var.queue = 0;
-	var.stack_len = 0;
+	element = &temp;
+	element->fname = argv[1];
 	if (argc != 2)
 	{
-		dprintf(STDOUT_FILENO, "USAGE: monty file\n");
-		exit(EXIT_FAILURE);
+		print_error(1);
 	}
-	fs = fopen(argv[1], "r");
-	if (fs == NULL)
+
+	element->fp = fopen(element->fname, "r");
+	if (element->fp == NULL)
 	{
-		dprintf(STDOUT_FILENO, "Error: Can't open file %s\n", argv[1]);
-		exit(EXIT_FAILURE);
+		print_error(2);
 	}
-	on_exit(free_lineptr, &lineptr);
-	on_exit(free_stack, &stack);
-	on_exit(m_fs_close, fs);
-	while (getline(&lineptr, &n, fs) != -1)
+
+	for (; getline(&(element->buf), &n, element->fp) != EOF; element->ln++)
 	{
-		line_number++;
-		op = strtok(lineptr, "\n\t\r ");
-		if (op != NULL && op[0] != '#')
+		element->tokened = malloc(sizeof(char *) * 2);
+		if (!element->tokened)
+			print_error(3);
+		tokenize(element->buf);
+		execute_cmd(stack);
+		free_buffer();
+		free_token();
+	}
+	free_buffer();
+	free_token();
+	fclose(element->fp);
+	return (0);
+}
+
+/**
+ * execute_cmd - Executes commands
+ * @stack: Head of the stack
+ * Return: None
+ */
+void execute_cmd(stack_t *stack)
+{
+	instruction_t opcodes[] = {
+		{"push", push},
+		{"pall", pall},
+		{"nop", nop},
+		{"pint", pint},
+		{"pop", pop},
+		{"swap", swap},
+		{"add", add},
+		{NULL, NULL}
+	};
+	int i = 0;
+
+	if (element->tokened[0] == NULL)
+		return;
+	if (element->tokened[0][0] == '#')
+		return;
+
+	for (i = 0; opcodes[i].opcode != NULL; i++)
+	{
+		if (strcmp(element->tokened[0], opcodes[i].opcode) == 0)
 		{
-			get_op(op, &stack, line_number);
+			opcodes[i].f(&stack, element->ln);
+			break;
 		}
 	}
-	exit(EXIT_SUCCESS);
+	if (opcodes[i].opcode == NULL)
+		print_error(4);
 }
